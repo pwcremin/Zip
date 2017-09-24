@@ -1,0 +1,23 @@
+PODS:
+  - Zip (1.0.0)
+
+DEPENDENCIES:
+  - Zip (from `https://github.com/pwcremin/Zip.git`)
+
+EXTERNAL SOURCES:
+  Zip:
+    :git: https://github.com/pwcremin/Zip.git
+    :submodules: true
+
+CHECKOUT OPTIONS:
+  Zip:
+    :commit: be1a1e9592c65497f9e15981da164144f0f73795
+    :git: https://github.com/pwcremin/Zip.git
+    :submodules: true
+
+SPEC CHECKSUMS:
+  Zip: 26a2db6cebbab6ad2d063777dd29ae71641f23ac
+
+PODFILE CHECKSUM: 698c2de5a4090f58a55e97d66cc512106c03752c
+
+COCOAPODS: 1.1.1
