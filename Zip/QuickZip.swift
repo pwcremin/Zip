@@ -93,5 +93,11 @@ extension Zip {
         return destinationUrl
     }
     
+    public class func quickZipPhotoFiles(_ identifiers: [String], fileName: String, completion:  @escaping (ZipError?, URL?) -> Void) -> Void {
+        let fileManager = FileManager.default
+        let documentsUrl = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0] as URL
+        let destinationUrl = documentsUrl.appendingPathComponent("\(fileName).zip")
+        self.zipPhotoFiles(identifiers: identifiers, zipFilePath: destinationUrl, completion: completion)
+    }
     
 }

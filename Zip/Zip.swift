@@ -8,6 +8,7 @@
 
 import Foundation
 import minizip
+import Photos
 
 /// Zip error type
 public enum ZipError: Error {
@@ -33,7 +34,7 @@ public enum ZipCompression: Int {
     case BestSpeed
     case DefaultCompression
     case BestCompression
-
+    
     internal var minizipCompression: Int32 {
         switch self {
         case .NoCompression:
@@ -142,16 +143,16 @@ public class Zip {
             let fileNameSize = Int(fileInfo.size_filename) + 1
             //let fileName = UnsafeMutablePointer<CChar>(allocatingCapacity: fileNameSize)
             let fileName = UnsafeMutablePointer<CChar>.allocate(capacity: fileNameSize)
-
+            
             unzGetCurrentFileInfo64(zip, &fileInfo, fileName, UInt(fileNameSize), nil, 0, nil, 0)
             fileName[Int(fileInfo.size_filename)] = 0
-
+            
             var pathString = String(cString: fileName)
             
             guard pathString.characters.count > 0 else {
                 throw ZipError.unzipFail
             }
-
+            
             var isDirectory = false
             let fileInfoSizeFileName = Int(fileInfo.size_filename-1)
             if (fileName[fileInfoSizeFileName] == "/".cString(using: String.Encoding.utf8)?.first || fileName[fileInfoSizeFileName] == "\\".cString(using: String.Encoding.utf8)?.first) {
@@ -161,14 +162,12 @@ public class Zip {
             if pathString.rangeOfCharacter(from: CharacterSet(charactersIn: "/\\")) != nil {
                 pathString = pathString.replacingOccurrences(of: "\\", with: "/")
             }
-
+            
             let fullPath = destination.appendingPathComponent(pathString).path
-
+            
             let creationDate = Date()
-
-            let directoryAttributes = [FileAttributeKey.creationDate : creationDate,
-                                       FileAttributeKey.modificationDate : creationDate]
-
+            let directoryAttributes = [FileAttributeKey.creationDate.rawValue : creationDate,
+                                       FileAttributeKey.modificationDate.rawValue : creationDate]
             do {
                 if isDirectory {
                     try fileManager.createDirectory(atPath: fullPath, withIntermediateDirectories: true, attributes: directoryAttributes)
@@ -182,32 +181,24 @@ public class Zip {
                 unzCloseCurrentFile(zip)
                 ret = unzGoToNextFile(zip)
             }
-
-            var writeBytes: UInt64 = 0
             var filePointer: UnsafeMutablePointer<FILE>?
             filePointer = fopen(fullPath, "wb")
             while filePointer != nil {
                 let readBytes = unzReadCurrentFile(zip, &buffer, bufferSize)
                 if readBytes > 0 {
-                    guard fwrite(buffer, Int(readBytes), 1, filePointer) == 1 else {
-                        throw ZipError.unzipFail
-                    }
-                    writeBytes += UInt64(readBytes)
+                    fwrite(buffer, Int(readBytes), 1, filePointer)
                 }
                 else {
                     break
                 }
             }
-
+            
             fclose(filePointer)
             crc_ret = unzCloseCurrentFile(zip)
             if crc_ret == UNZ_CRCERROR {
                 throw ZipError.unzipFail
             }
-            guard writeBytes == fileInfo.uncompressed_size else {
-                throw ZipError.unzipFail
-            }
-
+            
             //Set file permissions from current fileInfo
             if fileInfo.external_fa != 0 {
                 let permissions = (fileInfo.external_fa >> 16) & 0x1FF
@@ -220,7 +211,7 @@ public class Zip {
                     }
                 }
             }
-
+            
             ret = unzGoToNextFile(zip)
             
             // Update progress handler
@@ -247,6 +238,88 @@ public class Zip {
     }
     
     // MARK: Zip
+    
+    /**
+     Zip files.
+     
+     - parameter paths:       Array of NSURL filepaths.
+     - parameter zipFilePath: Destination NSURL, should lead to a .zip filepath.
+     - parameter password:    Password string. Optional.
+     - parameter compression: Compression strategy
+     - parameter progress: A progress closure called after unzipping each file in the archive. Double value betweem 0 and 1.
+     
+     - throws: Error if zipping fails.
+     
+     - notes: Supports implicit progress composition
+     */
+    public class func zipPhotoFiles(identifiers: [String], zipFilePath: URL, compression: ZipCompression = .DefaultCompression,completion:  @escaping (ZipError?, URL?) -> Void)  {
+        
+        var zipError: ZipError? = nil;
+        
+        // Zip set up
+        let chunkSize: Int = 16384
+        
+        let destinationPath = zipFilePath.path
+        let zip = zipOpen(destinationPath, APPEND_STATUS_CREATE)
+        
+        let assets = PHAsset.fetchAssets(withLocalIdentifiers: identifiers, options: PHFetchOptions())
+        
+        let assetSizeGroup = DispatchGroup()
+        let semaphore = DispatchSemaphore(value: 1)
+        assets.enumerateObjects ({ (asset, index, stop) in
+            assetSizeGroup.enter()
+            PHImageManager.default().requestImageData(for: asset, options: nil){
+                (imageData, dataUTI, orientation, info) in
+                
+                var zipInfo: zip_fileinfo = zip_fileinfo(tmz_date: tm_zip(tm_sec: 0, tm_min: 0, tm_hour: 0, tm_mday: 0, tm_mon: 0, tm_year: 0), dosDate: 0, internal_fa: 0, external_fa: 0)
+                
+                let components = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: asset.creationDate!)
+                
+                zipInfo.tmz_date.tm_sec = UInt32(components.second!)
+                zipInfo.tmz_date.tm_min = UInt32(components.minute!)
+                zipInfo.tmz_date.tm_hour = UInt32(components.hour!)
+                zipInfo.tmz_date.tm_mday = UInt32(components.day!)
+                zipInfo.tmz_date.tm_mon = UInt32(components.month!) - 1
+                zipInfo.tmz_date.tm_year = UInt32(components.year!)
+                
+                
+                semaphore.wait();
+                
+                if let fileName = (info?["PHImageFileURLKey"] as? NSURL)?.lastPathComponent {
+                    zipOpenNewFileInZip3(zip, fileName, &zipInfo, nil, 0, nil, 0, nil,Z_DEFLATED, compression.minizipCompression, 0, -MAX_WBITS, DEF_MEM_LEVEL, Z_DEFAULT_STRATEGY, nil, 0)
+                }
+                else {
+                    zipError = ZipError.zipFail
+                }
+             
+                let readData:InputStream = InputStream(data: imageData!);
+                let buffer:UnsafeMutablePointer<UInt8> = UnsafeMutablePointer.allocate(capacity: chunkSize)
+                
+                
+                
+                let length = readData.read(buffer, maxLength: chunkSize)
+                
+                while(length > 0)
+                {
+                    zipWriteInFileInZip(zip, buffer, UInt32(length))
+                    readData.read(buffer, maxLength: chunkSize)
+                }
+            
+
+                zipCloseFileInZip(zip)
+            
+                semaphore.signal()
+                
+                assetSizeGroup.leave();
+            }
+        })
+        
+        assetSizeGroup.notify(queue: DispatchQueue.main) {
+            zipClose(zip, nil)
+            completion(zipError, zipFilePath);
+        }
+    }
+    
     
     
     /**
