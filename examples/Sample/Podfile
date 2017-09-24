@@ -3,5 +3,5 @@ platform :ios, "9.0"
 use_frameworks!
 
 target ‘Sample’ do 
-pod 'Zip', :git => 'https://github.com/marmelroy/Zip.git', :submodules => true
+pod 'Zip', :git => 'https://github.com/pwcremin/Zip.git', :submodules => true
 end

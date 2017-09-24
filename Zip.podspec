@@ -20,7 +20,7 @@ Pod::Spec.new do |s|
                       A Swift framework for zipping and unzipping files. Simple and quick to use. Built on top of minizip.
                      DESC
 
-  s.homepage         = "https://github.com/marmelroy/Zip"
+  s.homepage         = "https://github.com/pwcremin/Zip"
   # s.screenshots     = "www.example.com/screenshots_1", "www.example.com/screenshots_2"
   s.license          = 'MIT'
   s.author           = { "Roy Marmelstein" => "marmelroy@gmail.com" }
