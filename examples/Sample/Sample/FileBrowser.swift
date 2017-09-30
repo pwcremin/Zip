@@ -11,6 +11,7 @@ import Zip
 
 class FileBrowser: UIViewController, UITableViewDataSource, UITableViewDelegate {
     
+    
     // IBOutlets
     @IBOutlet weak var tableView: UITableView!
     @IBOutlet weak var selectionCounter: UIBarButtonItem!
@@ -154,6 +155,7 @@ class FileBrowser: UIViewController, UITableViewDataSource, UITableViewDelegate 
             urlPaths.append(path!.appendingPathComponent(filePath))
         }
         do {
+            
             let _ = try Zip.quickZipFiles(urlPaths, fileName: "Archive")
             self.selectedFiles.removeAll()
             updateSelection()

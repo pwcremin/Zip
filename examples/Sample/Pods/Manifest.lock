@@ -11,7 +11,7 @@ EXTERNAL SOURCES:
 
 CHECKOUT OPTIONS:
   Zip:
-    :commit: be1a1e9592c65497f9e15981da164144f0f73795
+    :commit: 670e590ec96fe7136319b7f386eaa7f4d6736828
     :git: https://github.com/pwcremin/Zip.git
     :submodules: true
 
